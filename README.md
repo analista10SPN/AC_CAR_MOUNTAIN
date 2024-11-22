@@ -8,7 +8,11 @@
 
 This study presents a modern Actor-Critic implementation for solving the Mountain Car Continuous control problem. Our approach integrates Proximal Policy Optimization (PPO) and Generalized Advantage Estimation (GAE) to achieve consistent convergence while effectively avoiding local minima traps. The implementation demonstrates robust learning behavior, achieving solution convergence in approximately 200 episodes with a 90% success rate. Through sophisticated reward shaping and careful architectural decisions, our solution overcomes the inherent challenges of sparse rewards and continuous action spaces.
 
-_The complete implementation code for this project can be found at: [GitHub Repository Placeholder]_
+
+
+
+https://github.com/user-attachments/assets/6557ed8b-b49b-4418-9ae6-32d8bea3955e
+
 
 ## Index
 
