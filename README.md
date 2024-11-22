@@ -11,7 +11,7 @@ This study presents a modern Actor-Critic implementation for solving the Mountai
 
 
 
-https://github.com/user-attachments/assets/6557ed8b-b49b-4418-9ae6-32d8bea3955e
+https://github.com/user-attachments/assets/e78c4ae2-766b-4773-96a2-dd492733e3ab
 
 
 ## Index
