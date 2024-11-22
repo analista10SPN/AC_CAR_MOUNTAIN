@@ -17,35 +17,41 @@ https://github.com/user-attachments/assets/e78c4ae2-766b-4773-96a2-dd492733e3ab
 ## Index
 
 1. **Introduction and Problem Statement**
-   1.1. Reinforcement Learning Overview
-   1.2. Actor-Critic Design
-   1.3. The Continuous Mountain Car Problem
-   1.4. Continuous Mountain Car State, Actions and Rewards
+
+   - 1.1. Reinforcement Learning Overview
+   - 1.2. Actor-Critic Design
+   - 1.3. The Continuous Mountain Car Problem
+   - 1.4. Continuous Mountain Car State, Actions and Rewards
 
 2. **Theoretical Framework**
-   2.1. Actor-Critic Foundation
-   2.2. Modern Enhancements
+
+   - 2.1. Actor-Critic Foundation
+   - 2.2. Modern Enhancements
 
 3. **Implementation Architecture**
-   3.1. Network Design
-   3.2. Shared Architecture Design Rationale
-   3.3. Training Process
-   3.4. Exploration Strategy
-   3.5. Advantage Estimation
-   3.6. Training Loop Structure
-   3.7 Implementation Parameters and Algorithm Overview
+
+   - 3.1. Network Design
+   - 3.2. Shared Architecture Design Rationale
+   - 3.3. Training Process
+   - 3.4. Exploration Strategy
+   - 3.5. Advantage Estimation
+   - 3.6. Training Loop Structure
+   - 3.7 Implementation Parameters and Algorithm Overview
 
 4. **Results Analysis**
-   4.1. Training Dynamics
-   4.2. Critic Learning Convergence
-   4.3. Policy Evolution
-   4.4. Performance Comparison
-   4.5. Local Minima Analysis
+
+   - 4.1. Training Dynamics
+   - 4.2. Critic Learning Convergence
+   - 4.3. Policy Evolution
+   - 4.4. Performance Comparison
+   - 4.5. Local Minima Analysis
 
 5. **Discussion and Future Work**
-   5.1. Architectural Insights
-   5.2. Limitations
-   5.3. Future Improvements
+
+   - 5.1. Architectural Insights
+   - 5.2. Limitations
+   - 5.3. Future Improvements
+
 6. **References**
 
 ## 1. Introduction and Problem Statement
