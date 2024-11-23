@@ -99,7 +99,9 @@ The environment presents three fundamental challenges. First, the reward structu
 
 ### 2.1 Actor-Critic Foundation
 
-The Actor-Critic architecture represents a sophisticated approach to reinforcement learning that combines policy gradient methods with value function approximation. The framework decomposes the learning process into two interrelated components: an actor that learns a policy distribution over actions, and a critic that evaluates state values to guide policy improvement.
+The Actor-Critic architecture represents a sophisticated approach to reinforcement learning that combines policy gradient methods with value function approximation. At its core, Actor-Critic methods utilize deep neural networks to approximate both the policy and value functions, leveraging the networks' capacity to learn complex mappings from high-dimensional state spaces to actions and values.
+
+The framework decomposes the learning process into two interrelated components: an actor network that learns a policy distribution over actions, and a critic network that evaluates state values to guide policy improvement. These neural networks, typically implemented as multilayer perceptrons with several hidden layers, enable the agent to learn rich representations of the state space and develop sophisticated control strategies.
 
 The foundational objective of our implementation maximizes the expected return:
 
