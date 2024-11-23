@@ -31,7 +31,7 @@ https://github.com/user-attachments/assets/e78c4ae2-766b-4773-96a2-dd492733e3ab
 3. **Implementation Architecture**
 
    - 3.1. Network Design
-   - 3.2. Shared Architecture Design Rationale
+   - 3.2. Architecture Design Rationale
    - 3.3. Training Process
    - 3.4. Exploration Strategy
    - 3.5. Advantage Estimation
