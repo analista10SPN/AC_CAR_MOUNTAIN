@@ -105,11 +105,11 @@ The framework decomposes the learning process into two interrelated components: 
 
 The foundational objective of our implementation maximizes the expected return:
 
-$$J(\theta) = \mathbb{E}_{\pi_\theta}[\sum_{t=0}^{\infty} \gamma^t r_t]$$
+<img src="https://latex.codecogs.com/svg.latex?J(\theta)%20=%20\mathbb{E}_{\pi_\theta}[\sum_{t=0}^{\infty}%20\gamma^t%20r_t]" alt="Expected Return Equation"/>
 
 The policy gradient theorem provides the fundamental update direction:
 
-$\nabla_\theta J(\theta) = \mathbb{E}_{\pi_\theta}[\nabla_\theta \log \pi_\theta(a|s)A(s,a)]$
+<img src="https://latex.codecogs.com/svg.latex?\nabla_\theta%20J(\theta)%20=%20\mathbb{E}_{\pi_\theta}[\nabla_\theta%20\log%20\pi_\theta(a|s)A(s,a)]" alt="Policy Gradient Theorem"/>
 
 In our continuous action space, the policy $\pi_\theta(a|s)$ is represented by a Gaussian distribution with learned mean and standard deviation. This formulation enables the expression of a continuous range of actions while maintaining exploration through controlled stochasticity.
 
