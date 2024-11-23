@@ -115,31 +115,65 @@ In our continuous action space, the policy $\pi_\theta(a|s)$ is represented by a
 
 ### 2.2 Modern Enhancements
 
-Our implementation incorporates two critical modern enhancements to the traditional Actor-Critic framework: Proximal Policy Optimization (PPO) and Generalized Advantage Estimation (GAE). These additions significantly improve learning stability and efficiency.
+Our implementation incorporates two critical modern enhancements to the traditional Actor-Critic framework: Proximal Policy Optimization (PPO) and Generalized Advantage Estimation (GAE). These techniques are particularly crucial for the Mountain Car problem due to its challenging exploration requirements and delayed rewards.
 
-PPO introduces a constrained optimization objective that prevents destructively large policy updates. The clipped objective function takes the form:
+#### Proximal Policy Optimization (PPO)
+
+Traditional policy gradient methods can be unstable due to large policy updates that drastically change the behavior of the agent. This is particularly problematic in the Mountain Car environment where successful policies require precise timing of oscillatory actions. PPO addresses this by introducing a constrained optimization objective:
 
 $L^{CLIP}(\theta) = \mathbb{E}_t[\min(r_t(\theta)A_t, \text{clip}(r_t(\theta), 1-\epsilon, 1+\epsilon)A_t)]$
 
-The probability ratio $r_t(\theta)$ compares the likelihood of actions under the current and previous policies:
+Where the probability ratio $r_t(\theta)$ measures how much the current policy has changed from the old policy:
 
 $r_t(\theta) = \frac{\pi_\theta(a_t|s_t)}{\pi_{\theta_{old}}(a_t|s_t)}$
 
-The clipping parameter $\epsilon$ (set to 0.2 in our implementation) ensures policy updates remain within a trusted region, promoting stable learning while maintaining exploration.
+The PPO mechanism provides crucial stability through several key mechanisms. First, the clipping parameter $\epsilon$ (set to 0.2) prevents destructively large policy updates by limiting how much the policy can change in a single step. This is implemented through a dual-objective optimization where the final loss is computed as the maximum of the clipped and unclipped objectives:
 
-GAE addresses the fundamental challenge of advantage estimation in continuous control tasks. The GAE parameter $\lambda$ enables a controlled trade-off between bias and variance in advantage estimates:
+```python
+actor_loss1 = -ratio * advantages
+actor_loss2 = -torch.clamp(ratio, 0.8, 1.2) * advantages
+actor_loss = torch.max(actor_loss1, actor_loss2).mean()
+```
+
+Furthermore, by constraining updates to be within $[1-\epsilon, 1+\epsilon]$ of the old policy, PPO creates an adaptive trust region that preserves successful oscillatory behaviors once discovered. This trust region mechanism allows for gradual refinement of action timing while preventing catastrophic forgetting of effective strategies. The clipped objective ensures that exploration remains stable by preventing sudden collapse to deterministic policies, excessive growth of action variances, and loss of learned momentum-building strategies.
+
+#### Generalized Advantage Estimation (GAE)
+
+The Mountain Car problem presents a significant challenge in credit assignment due to the delayed nature of rewards - success requires a precise sequence of actions over many timesteps. GAE provides a sophisticated solution for estimating the advantage function $A(s,a)$, which measures how much better an action is compared to the average:
 
 $A^{GAE}(\lambda) = \sum_{l=0}^{\infty} (\gamma\lambda)^l \delta_{t+l}$
 
-The temporal difference error $\delta_t$ captures the difference between predicted and realized values:
+which can be computed recursively as:
+
+$A^{GAE}_t(\lambda) = \delta_t + \gamma\lambda A^{GAE}_{t+1}(\lambda)$
+
+The temporal difference error $\delta_t$ captures immediate rewards and value changes:
 
 $\delta_t = r_t + \gamma V(s_{t+1}) - V(s_t)$
+
+The GAE framework introduces a crucial bias-variance trade-off through its $\lambda$ parameter, set to 0.95 in our implementation. Higher $\lambda$ values give more weight to actual returns, which proves beneficial for learning long-term momentum strategies, while lower values rely more on value estimates, effectively reducing variance in updates. This is implemented recursively in our code:
+
+```python
+delta = rewards[t] + gamma * next_val - values[t]
+gae = delta + gamma * gae_lambda * gae  # Computed recursively
+```
+
+GAE's approach to credit assignment proves particularly effective by propagating rewards back through time while carefully weighing immediate and future consequences of actions. This mechanism accounts for the full sequence of momentum-building actions necessary for successful task completion. The framework also significantly improves value function learning by providing more stable advantage estimates for policy updates, better handling of delayed rewards, and reduced variance in value function gradients. This is reflected in our value function update:
+
+```python
+returns = gae + values[t]  # Using GAE for value function targets
+critic_loss = (returns - values).pow(2).mean()
+```
+
+#### Integration Benefits
+
+The synergistic combination of PPO and GAE creates a robust learning framework specifically suited to address the key challenges of the Mountain Car environment. PPO's policy update constraints work in concert with GAE's sophisticated advantage estimation to enable stable learning of complex oscillatory strategies. This combination proves particularly effective at handling the sparse reward structure while maintaining consistent exploration.
 
 ## 3. Implementation Architecture
 
 ### 3.1 Network Design
 
-The architecture implements a unified ActorCritic class where both policy and value functions share the same base network structure while maintaining specialized output layers. This design choice promotes efficient feature extraction and parameter sharing while allowing for task-specific outputs.
+The architecture implements a unified ActorCritic class where both policy and value functions are implemented as separate neural networks within the same class, each with their own parameters and specialized outputs.
 
 ```python
 class ActorCritic(nn.Module):
@@ -195,28 +229,68 @@ def get_value(self, state):
     return self.critic(state)
 ```
 
-This unified architecture offers several advantages. The shared structure allows for efficient learning of common state features while the specialized output layers enable task-specific transformations. The parameter count remains manageable, reducing the risk of overfitting while maintaining sufficient capacity for the control task.
+This unified class architecture offers several advantages. The separate networks maintain full independence in learning their respective features while being organized in a single cohesive implementation. The parameter count remains manageable while maintaining sufficient capacity for the control task.
 
-### 3.2 Shared Architecture Design Rationale
+### 3.2 Architecture Design Rationale
 
-The decision to implement a shared-weights Actor-Critic architecture stems from several theoretical and practical considerations. While traditional Actor-Critic implementations often separate the policy and value networks entirely, our shared approach maintains the fundamental Actor-Critic principles while leveraging the advantages of parameter sharing.
+The decision to implement the Actor and Critic as separate networks within a unified class stems from several theoretical and practical considerations. Our approach maintains complete independence between these components while organizing them in a clean, unified implementation.
 
-The core intuition behind this design choice lies in the relationship between policy and value estimation in the Mountain Car environment. Both tasks rely on similar fundamental features of the state space - position and velocity patterns that lead to successful trajectories. By sharing the network's early layers, we enable more efficient learning of these common representations:
+The mathematical foundation for this separation becomes apparent when we examine the distinct architectures and optimization objectives of each network.
 
-$\phi(s) = h_L(...h_2(h_1(s)))$
+The actor network implements a Gaussian policy with state-dependent mean and standard deviation:
 
-Where $\phi(s)$ represents the shared feature extraction through L hidden layers. These features then feed into specialized heads:
+$\pi_\theta(a|s) = \mathcal{N}(\mu_\theta(s), \sigma_\theta(s))$
 
-$\pi_\theta(a|s) = f_{actor}(\phi(s))$ for the policy
-$V_\theta(s) = f_{critic}(\phi(s))$ for the value function
+Where the network outputs both $\mu_\theta(s)$ and $\log \sigma_\theta(s)$ through separate parameters:
 
-This remains a true Actor-Critic architecture given that the network maintains distinct policy and value outputs, preserving the separation of concerns fundamental to Actor-Critic methods. The learning updates still follow different objectives for actor and critic components while the advantage computation and policy improvement mechanisms remain unchanged
+$[\mu_\theta(s), \log \sigma_\theta(s)] = W_3(\text{ReLU}(W_2(\text{ReLU}(W_1s + b_1)) + b_2)) + b_3$
 
-The shared architecture provides several benefits: the first benefit is parameter efficiency by reducing the total parameter count while maintaining model capacity. Another important improvement is the reutilization of features, common state-space patterns learned once benefit both policy and value estimation. There is also a regularization effect given that shared parameters act as a form of regularization, reducing overfitting risk. Finally, gradients from both actor and critic losses contribute to improving the shared feature extraction, resulting in a faster learning process.
+The actor optimizes the PPO objective:
+
+$J_{actor}(\theta_\pi) = \mathbb{E}t[\min(r_t(\theta\pi)A_t, \text{clip}(r_t(\theta_\pi), 1-\epsilon, 1+\epsilon)A_t)] + \alpha H(\pi_\theta)$
+
+Where:
+
+$\frac{r_t(\theta_\pi) = \pi_\theta(a_t|s_t)}{\pi_{\theta_{old}}(a_t|s_t)}$ is the probability ratio
+$A_t$ is the advantage estimate
+$H(\pi_\theta)$ is the policy entropy
+$\alpha = 0.02$ is the entropy coefficient
+
+The critic network maintains its own independent architecture to estimate state values:
+
+$V_{\theta_V}(s) = W'_3(\text{ReLU}(W'_2(\text{ReLU}(W'_1s + b'_1)) + b'_2)) + b'_3$
+
+Optimizing the value estimation error:
+$J_{critic}(\theta_V) = \mathbb{E}[(V_{\theta_V}(s) - R_t)^2]$
+
+Where $R_t$ is the GAE-computed return:
+
+$R_t = \sum_{l=0}^{\infty} (\gamma\lambda)^l \delta_{t+l}$
+$\delta_t = r_t + \gamma V_{\theta_V}(s_{t+1}) - V_{\theta_V}(s_t)$
+
+In the Mountain Car environment, these networks learn fundamentally different mappings:
+
+The actor's policy mapping must capture precise control decisions:
+
+$a_t = \mu_\theta(s_t) + \sigma_\theta(s_t)\epsilon, \epsilon \sim \mathcal{N}(0,1)$
+
+With exploration noise during early training:
+
+$a_t = \text{clip}(\mu_\theta(s_t) + \sigma_\theta(s_t)\epsilon + \eta_t, -1, 1)$
+Where $\eta_t \sim \mathcal{N}(0, \epsilon_t)$ and $\epsilon_t = \max(\epsilon_{min}, \epsilon_0 \cdot \alpha^t)$
+
+The critic's value mapping estimates long-term returns:
+
+$V_{\theta_V}(s_t) \approx \mathbb{E}{\pi\theta}[\sum_{k=0}^{\infty} \gamma^k r_{t+k}|s_t]$
+
+The separate optimization of these networks is reflected in their different learning rates:
+
+$\theta_\pi \leftarrow \theta_\pi - 3\times10^{-4} \nabla_{\theta_\pi} J_{actor}$
+$\theta_V \leftarrow \theta_V - 1\times10^{-3} \nabla_{\theta_V} J_{critic}$
 
 ### 3.3 Training Process
 
-The training implementation maintains the distinction between actor and critic updates despite the shared architecture:
+The training implementation maintains the distinction between actor and critic updates:
 
 ```python
 # Actor update
@@ -244,7 +318,7 @@ actor_optimizer = optim.Adam(model.actor.parameters(), lr=3e-4)
 critic_optimizer = optim.Adam(model.critic.parameters(), lr=1e-3)
 ```
 
-This separation allows for different learning dynamics while still benefiting from the shared feature extraction. The critic's higher learning rate (1e-3 vs 3e-4) reflects its simpler task of value estimation compared to the actor's policy optimization.
+This separation allows for different learning dynamics between the actor and critic networks, with each optimizing its parameters independently.
 
 ### 3.4 Exploration Strategy
 
@@ -264,13 +338,7 @@ action = torch.clamp(action, -1, 1)
 exploration_noise = max(min_noise, exploration_noise * noise_decay)
 ```
 
-The exploration mechanism operates on multiple levels:
-
-1. **Intrinsic Policy Stochasticity**: The Gaussian policy naturally maintains exploration through its standard deviation parameter
-2. **Additional Exploration Noise**: External noise injection during early episodes ensures broader state-space coverage
-3. **Adaptive Decay**: The noise magnitude decreases exponentially while maintaining a minimum level
-
-The noise decay schedule follows:
+The exploration mechanism in our implementation operates through a sophisticated multi-layered approach designed to ensure thorough environment exploration. The foundation of our exploration strategy lies in the intrinsic stochasticity of the Gaussian policy, where the learned state-dependent standard deviation parameter naturally induces exploratory behavior throughout training. This base exploration is augmented by an additional external noise injection mechanism during the initial training phase. Specifically, during the first 100 episodes, Gaussian noise is added to the sampled actions, enabling broader state-space coverage and preventing premature convergence to suboptimal strategies. The magnitude of this supplementary exploration follows an exponential decay schedule while maintaining a minimum noise floor:
 
 $\epsilon_t = \max(\epsilon_{min}, \epsilon_0 \cdot \alpha^t)$
 
@@ -356,55 +424,64 @@ Exploration Parameters:
 #### Pseudocode
 
 ```
-Initialize ActorCritic model θ with shared layers
-Initialize empty metrics tracker
+Initialize:
+    ActorCritic model with separate actor and critic networks
+    Metrics tracker
+    Initial exploration noise ε = 0.5
+    Experience buffers D = {}
+
 for episode = 1 to MAX_EPISODES do
-    Reset environment, get initial state s₀
-    Initialize empty trajectory buffers
-    reward_sum = 0
-    for t = 0 to MAX_STEPS do
-        # Collect experience
-        Get action distribution π_θ(·|sₜ) and value V_θ(sₜ)
-        Sample action aₜ ~ π_θ(·|sₜ)
-        if episode < 100 then
-            Add exploration noise ε to action
-        Execute aₜ, observe rₜ, sₜ₊₁
-        Store (sₜ, aₜ, rₜ, V_θ(sₜ), log π_θ(aₜ|sₜ)) in buffers
+    Reset environment, get normalized initial state
+    D.clear()  # Clear episode buffers
 
-        # Apply reward shaping
-        r_shaped = rₜ
-        if uphill_movement then
-            r_shaped += 10 * Δx
-        if velocity_increase then
-            r_shaped += 5 * Δ|v|
-        if near_bottom then
-            r_shaped -= 0.1
+    # Collect trajectory
+    while not done do
+        # Get actions and values
+        μ, σ = actor(state)
+        value = critic(state)
+        action = sample from N(μ, σ)
 
-        reward_sum += rₜ
-        if done then break
+        # Add exploration noise in early training
+        if episode < 100:
+            action += noise_sample * ε
+        action = clip(action, -1, 1)
 
-    # Compute advantages using GAE
-    Compute returns and advantages using γ and λ
-    Normalize advantages
+        # Environment interaction
+        next_state, reward = execute(action)
 
-    # PPO updates
-    for epoch = 1 to PPO_EPOCHS do
-        # Actor update
-        Compute π_θ_new(·|s) for all states
-        Compute PPO objective with clip range ε
-        Update actor with learning rate 3e-4
+        # Shape rewards
+        reward += uphill_bonus + velocity_bonus - valley_penalty
 
-        # Critic update
-        Compute MSE loss for value predictions
-        Update critic with learning rate 1e-3
+        # Store transition
+        D ← (state, action, reward, value, log_prob)
+        state = next_state
 
-    # Update exploration noise
-    ε = max(ε_min, ε * 0.995)
+    # Process episode data
+    advantages = compute_gae(D.rewards, D.values)
+    returns = compute_returns(D.rewards, D.values)
+    normalize(advantages)
 
-    # Track metrics
-    Update and plot metrics
-    if reward_sum ≥ 96.5 then
-        return θ  # Solved
+    # PPO training loop
+    for update = 1 to 4 do
+        # Update actor
+        ratio = new_policy / old_policy
+        clip_ratio = clip(ratio, 0.8, 1.2)
+        actor_loss = min(ratio * advantages, clip_ratio * advantages)
+        update_actor(actor_loss + entropy_bonus)
+
+        # Update critic
+        value_loss = mse(returns, critic(states))
+        update_critic(value_loss)
+
+    # Decay exploration
+    ε = max(0.1, ε * 0.995)
+
+    # Log progress
+    update_metrics()
+    if solved:
+        return model
+
+return model
 ```
 
 ## 4. Results Analysis
@@ -420,7 +497,7 @@ Episode rewards demonstrate a clear progression through three phases. The initia
 
 ### 4.2 Critic Learning Convergence
 
-The critic's learning progression in our shared-weights Actor-Critic architecture reveals fascinating patterns that shed light on both the learning dynamics and the Mountain Car environment's inherent challenges. The logarithmic scale visualization of the critic loss demonstrates a complex convergence pattern characterized by distinct phases and persistent oscillations:
+The critic's learning progression in our Actor-Critic architecture reveals fascinating patterns that shed light on both the learning dynamics and the Mountain Car environment's inherent challenges. The logarithmic scale visualization of the critic loss demonstrates a complex convergence pattern characterized by distinct phases and persistent oscillations:
 
 ![alt text](image-2.png)
 _Figure 3: Log-scale visualization of critic loss._
@@ -428,8 +505,6 @@ _Figure 3: Log-scale visualization of critic loss._
 The loss pattern shows an initial phase of high-magnitude errors (10² range) followed by a general downward trend, but with notable characteristics that reflect the environment's dynamics. The persistent oscillations and occasional spikes in loss, even after apparent convergence, can be attributed to several key factors.
 
 In the Mountain Car environment **state values are highly interdependent**. When the policy improves and finds new ways to build momentum, it can suddenly make previously learned value estimates inaccurate, leading to spikes in critic loss.
-
-Our shared-weights architecture means that **changes in policy can directly affect the feature extraction** layers used for value estimation. When the actor discovers improved strategies (like more efficient oscillation patterns), it can temporarily destabilize the critic's value predictions, manifesting as loss spikes.
 
 The stochastic nature of our policy, combined with the exploration noise schedule, means **the agent periodically explores new state-action pairs**. These exploration phases can lead to temporary increases in critic loss as the value function adapts to newly discovered trajectories.
 
@@ -466,13 +541,11 @@ The noise decay schedule balances exploration and exploitation, though in some c
 
 ## 5. Discussion and Future Work
 
-The success of our implementation stems from several key design decisions. The shared-weights actor-critic architecture proves particularly effective for the Mountain Car environment, where both policy and value estimation rely on similar underlying state-space features. This parameter sharing not only reduces the model's complexity but also accelerates learning through mutual feature extraction.
+The success of our implementation stems from several key design decisions. The separate actor and critic networks prove particularly effective for the Mountain Car environment, where policy and value estimation can independently develop specialized feature representations. This separation not only allows for focused learning but also provides stability through independent optimization.
 
-Our architecture maintains the essential Actor-Critic paradigm through specialized output layers while leveraging shared representations. The actor branch's Gaussian policy output, combined with tanh-bounded means and clamped standard deviations, provides controlled exploration within the environment's action bounds. Meanwhile, the critic branch's value estimation benefits from the same feature extraction pathway, enabling efficient learning of state-value relationships.
+The actor branch's Gaussian policy output, combined with tanh-bounded means and clamped standard deviations, provides controlled exploration within the environment's action bounds. Meanwhile, the critic branch's value estimation benefits from the same feature extraction pathway, enabling efficient learning of state-value relationships.
 
-The effectiveness of this design is further enhanced by several modern techniques. The PPO clipping mechanism prevents destructive policy updates, particularly crucial in our shared architecture where aggressive updates could destabilize both policy and value learning. Orthogonal initialization with carefully tuned gains ensures proper gradient flow through the ReLU activations, while separate learning rates for actor and critic components (3e-4 and 1e-3 respectively) accommodate their different learning dynamics despite the shared architecture.
-
-The success of our approach suggests that in environments with strong correlations between optimal policies and value functions, architectural sharing can provide both computational efficiency and learning benefits.
+The effectiveness of this design is further enhanced by several modern techniques. The PPO clipping mechanism prevents destructive policy updates, particularly crucial for the Mountain Car's problem nature, where aggressive updates could destabilize both policy and value learning. Orthogonal initialization with carefully tuned gains ensures proper gradient flow through the ReLU activations, while separate learning rates for actor and critic components (3e-4 and 1e-3 respectively) accommodate their different learning dynamics.
 
 ### 5.2 Limitations
 
@@ -495,3 +568,5 @@ The implementation of adaptive exploration strategies could address the local mi
 4. [Steinbach, A. (2019). Actor-Critic using Deep RL: Continuous Mountain Car in TensorFlow. Medium.](https://medium.com/@asteinbach/actor-critic-using-deep-rl-continuous-mountain-car-in-tensorflow-4c1fb2110f7c)
 
 5. [Gymnasium Documentation](https://gymnasium.farama.org/environments/classic_control/mountain_car_continuous/).
+
+
