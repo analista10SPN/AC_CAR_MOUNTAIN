@@ -105,7 +105,7 @@ The framework decomposes the learning process into two interrelated components: 
 
 The foundational objective of our implementation maximizes the expected return:
 
-$J(\theta) = \mathbb{E}_{\pi_\theta}[\sum_{t=0}^{\infty} \gamma^t r_t]$
+$$J(\theta) = \mathbb{E}_{\pi_\theta}[\sum_{t=0}^{\infty} \gamma^t r_t]$$
 
 The policy gradient theorem provides the fundamental update direction:
 
